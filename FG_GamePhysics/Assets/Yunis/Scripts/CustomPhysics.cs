@@ -21,7 +21,7 @@ public class CustomPhysics : MonoBehaviour
 
     private void ApplyGravity() 
     {
-        velocity = velocity + Physics.gravity * Time.deltaTime;
+        velocity = velocity + (Physics.gravity * mass) * Time.deltaTime;
     }
 
     public void ApplyImpulse(Vector3 force) 

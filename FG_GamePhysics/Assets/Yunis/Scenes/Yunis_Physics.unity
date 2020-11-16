@@ -308,7 +308,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   bulletPrefab: {fileID: 901923951885578071, guid: a78e2dd93083ecc419bf23160bcd826a,
     type: 3}
+  fireBulletCooldown: 1
   rotationSpeed: 300
+  maxImpulseForce: 18000
 --- !u!23 &526482670
 MeshRenderer:
   m_ObjectHideFlags: 0
