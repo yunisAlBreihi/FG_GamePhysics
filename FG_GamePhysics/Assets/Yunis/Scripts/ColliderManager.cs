@@ -1,5 +1,4 @@
-﻿using System.Collections;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 
 public class ColliderManager : MonoBehaviour
@@ -8,8 +7,24 @@ public class ColliderManager : MonoBehaviour
 
     public List<CustomBoxCollider> CollidersInWorld => collidersInWorld;
 
-    public void AddColliderToList(CustomBoxCollider collider) 
+    /// <summary>
+    /// Adds a Custom Box Collider to the manager.
+    /// </summary>
+    /// <returns></returns>
+    public void AddColliderToList(CustomBoxCollider collider)
     {
         collidersInWorld.Add(collider);
+    }
+
+    /// <summary>
+    /// Removes a Custom Box Collider to the manager.
+    /// </summary>
+    /// <returns></returns>
+    public void RemoveColliderToList(CustomBoxCollider collider)
+    {
+        if (collidersInWorld.Contains(collider) == true)
+        {
+            collidersInWorld.Remove(collider);
+        }
     }
 }

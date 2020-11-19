@@ -1,44 +1,43 @@
-﻿using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
+﻿using UnityEngine;
 
 public class CustomBoxCollider : MonoBehaviour
 {
-    [SerializeField, Range(0.0f, 1.0f)] private float roughness = 0.2f;
-    [SerializeField] private bool showCollider = true;
+    [SerializeField, Tooltip("Shows the boundaries of the collider")]
+    private bool showCollider = true;
 
     private Vector3 position = Vector3.zero;
     private Vector3 scale = Vector3.zero;
 
-    private ColliderManager manager = null;
-    private CustomBoxCollider otherCollider = null;
+    private ColliderManager colliderManager = null;
+    private CustomBoxCollider hitCollider = null;
 
     private CustomPhysics physics = null;
 
     public Vector3 Position => position;
     public Vector3 Scale => scale;
+    public CustomBoxCollider HitCollider => hitCollider;
 
     private void Awake()
     {
-        manager = FindObjectOfType<ColliderManager>();
-        if (manager == null)
-        {
+        //Finds a collision manager in the world. If found, adds this collider to the manager list.
+        colliderManager = FindObjectOfType<ColliderManager>();
+        if (colliderManager == null)
             Debug.LogError("You need to have a collision manager in the scene!");
-        }
         else
-        {
-            manager.AddColliderToList(this);
-        }
+            colliderManager.AddColliderToList(this);
 
+        //Finds a Custom Physics component on this object.
         physics = GetComponent<CustomPhysics>();
 
+        //Sets the transform and scale of the collider the same size as the object.
         position = transform.localPosition;
         scale = transform.localScale;
     }
 
-    private void FixedUpdate()
+    private void Update()
     {
-        if (otherCollider == null)
+        //Checks if there is any collisions
+        if (hitCollider == null)
         {
             OnCollisionBegin(CheckCollision());
         }
@@ -47,6 +46,7 @@ public class CustomBoxCollider : MonoBehaviour
             OnCollisionEnd();
         }
 
+        //Updates the colliders position and scale to match the object.
         if (position != transform.position)
         {
             UpdatePosition();
@@ -57,19 +57,36 @@ public class CustomBoxCollider : MonoBehaviour
         }
     }
 
+    private void OnDestroy()
+    {
+        colliderManager.RemoveColliderToList(this);
+    }
+
+    /// <summary>
+    /// Updates the colliders position to be the same as the objects position.
+    /// </summary>
+    /// <returns></returns>
     private void UpdatePosition()
     {
         position = transform.position;
     }
 
+    /// <summary>
+    /// Updates the colliders scale to be the same as the objects scale.
+    /// </summary>
+    /// <returns></returns>
     private void UpdateScale()
     {
         scale = transform.localScale;
     }
 
+    /// <summary>
+    /// Checks if there are any collisions between the colliders in the world.
+    /// </summary>
+    /// <returns></returns>
     public CustomBoxCollider CheckCollision()
     {
-        foreach (var collider in manager.CollidersInWorld)
+        foreach (var collider in colliderManager.CollidersInWorld)
         {
             if (collider == this)
             {
@@ -84,27 +101,63 @@ public class CustomBoxCollider : MonoBehaviour
         return null;
     }
 
+    /// <summary>
+    /// When a collider enters another collider.
+    /// </summary>
+    /// <returns></returns>
     public void OnCollisionBegin(CustomBoxCollider other)
     {
-
-        if (otherCollider != other)
+        if (hitCollider != other)
         {
-            if (physics != null)
-            {
-                physics.Reflect(transform.up, roughness);
-            }
-            otherCollider = other;
+            CorrectPhysicsObject(other);
+            hitCollider = other;
         }
     }
 
+    /// <summary>
+    /// When a collider exits another collider.
+    /// </summary>
+    /// <returns></returns>
     private void OnCollisionEnd()
     {
-        if (otherCollider != null)
+        if (hitCollider != null)
         {
-            otherCollider = null;
+            hitCollider = null;
+
+            //Removes the grounded status of the physics object.
+            if (physics != null)
+            {
+                physics.Grounded = false;
+            }
         }
     }
 
+    /// <summary>
+    /// Applies corresponding physics of the object holding this collider.
+    /// </summary>
+    /// <returns></returns>
+    private void CorrectPhysicsObject(CustomBoxCollider other)
+    {
+        if (physics != null)
+        {
+            //Reflects the force of the physics so the object bounces.
+            physics.Grounded = true;
+            physics.CorrectPosition(other);
+            physics.Reflect(transform.up);
+
+            //Add bounces to the bullet class if it has any.
+            Bullet bullet = physics.GetComponent<Bullet>();
+            if (bullet != null)
+            {
+                bullet.Bounce();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Is another object inside the collider?
+    /// </summary>
+    /// <returns></returns>
     public bool Contains(Transform other)
     {
         bool top = other.position.y - other.localScale.y / 2.0f < position.y + scale.y / 2.0f;
@@ -121,27 +174,12 @@ public class CustomBoxCollider : MonoBehaviour
         return false;
     }
 
-    public bool DebugContains(Vector3 otherPos, Vector3 otherSize)
-    {
-        bool top = otherPos.y - otherSize.y / 2.0f < transform.position.y + transform.localScale.y / 2.0f;
-        bool bot = otherPos.y + otherSize.y / 2.0f > transform.position.y - transform.localScale.y / 2.0f;
-        bool left = otherPos.x - otherSize.x / 2.0f < transform.position.x + transform.localScale.x / 2.0f;
-        bool right = otherPos.x + otherSize.x / 2.0f > transform.position.x - transform.localScale.x / 2.0f;
-        bool front = otherPos.z - otherSize.z / 2.0f < transform.position.z + transform.localScale.z / 2.0f;
-        bool back = otherPos.z + otherSize.z / 2.0f > transform.position.z - transform.localScale.z / 2.0f;
-
-        if (top && bot && left && right && front && back)
-        {
-            return true;
-        }
-        return false;
-    }
-
     private void OnDrawGizmos()
     {
+        //Shows a wire cube of the collider. Green if is colliding, red if is not colliding with anything.
         if (showCollider == true)
         {
-            if (otherCollider != null && Contains(otherCollider.transform))
+            if (hitCollider != null && Contains(hitCollider.transform))
             {
                 Gizmos.color = Color.green;
             }

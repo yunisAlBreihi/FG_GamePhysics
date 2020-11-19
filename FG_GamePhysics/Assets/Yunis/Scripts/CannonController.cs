@@ -1,32 +1,51 @@
-﻿using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
+﻿using UnityEngine;
 
 public class CannonController : MonoBehaviour
 {
-    [SerializeField] private CustomPhysics bulletPrefab = null;
-    [SerializeField] private float fireBulletCooldown = 1.0f;
-    [SerializeField] private float rotationSpeed = 300.0f;
-    [SerializeField] private float maxImpulseForce = 10000.0f;
+    [SerializeField, Tooltip("The physics object to fire with the canon.")]
+    private CustomPhysics physicsObjectToFirePrefab = null;
 
+    [SerializeField, Range(5.0f, 85.0f), Tooltip("The minimum vertical canon rotation.")]
+    private float minCanonRotation = 10.0f;
+
+    [SerializeField, Range(5.0f, 85.0f), Tooltip("The maximum vertical canon rotation.")]
+    private float maxCanonRotation = 85.0f;
+
+    [SerializeField, Range(0.1f, 5.0f), Tooltip("The time before you can fire again.")]
+    private float fireBulletCooldown = 1.0f;
+
+    [SerializeField, Range(50.0f, 1000.0f), Tooltip("Rotation speed of the canon.")]
+    private float rotationSpeed = 300.0f;
+
+    [SerializeField, Range(1000.0f, 100000.0f), Tooltip("Max firing power of the canon, when fully charged.")]
+    private float maxImpulseForce = 20000.0f;
+
+    private SpriteRenderer fireMeter = null;
     private GameObject canonPivot = null;
     private GameObject canonPipe = null;
     private CustomPhysics bullet = null;
 
+    //Const of inputs.
     private const string mouseX = "Mouse X";
     private const string mouseY = "Mouse Y";
     private const string fire = "Fire";
 
-    float fireBulletTimer = 1.0f;
-
+    private float fireBulletTimer = 1.0f;
     private bool holdingFire = false;
 
+    //Canon fire power.
     private float firePercent = 0.0f;
-    private float maxFirePower = 1.0f;
+    private float minFirePercent = 0.0f;
+    private float maxFirePercent = 1.0f;
 
     private void Awake()
     {
-        //Find the cannon child object
+        //Finds the meter for firing.
+        fireMeter = GetComponentInChildren<SpriteRenderer>();
+        if (fireMeter == null)
+            Debug.LogError(fireMeter + ": You need a fire meter on this object!");
+
+        //Find the cannon pivot child object
         foreach (Transform child in transform)
         {
             if (child.tag == "CanonPivot")
@@ -36,10 +55,9 @@ public class CannonController : MonoBehaviour
             }
         }
         if (canonPivot == null)
-        {
             Debug.LogWarning("Could not find a child object with CanonPivot tag!");
-        }
 
+        //Find the canon pipe child object.
         if (canonPivot != null)
         {
             foreach (Transform childOfChild in canonPivot.transform)
@@ -52,18 +70,16 @@ public class CannonController : MonoBehaviour
             }
         }
         if (canonPipe == null)
-        {
             Debug.LogWarning("Could not find a child object with CanonPipe tag!");
-        }
 
-        if (bulletPrefab == null)
-        {
+        //Checks to see if a bullet prefab has been set.
+        if (physicsObjectToFirePrefab == null)
             Debug.LogError("You need to set a bullet prefab!");
-        }
+
+        minFirePercent = maxImpulseForce / 3.0f;
     }
 
-    // Update is called once per frame
-    void Update()
+    private void Update()
     {
         if (Input.GetMouseButton(0))
         {
@@ -71,46 +87,46 @@ public class CannonController : MonoBehaviour
             canonPipe.transform.rotation *= Quaternion.AngleAxis(-Input.GetAxis(mouseY) * rotationSpeed * Time.deltaTime, Vector3.right);
             Cursor.visible = false;
         }
-        else if (Input.GetMouseButtonUp(1))
+
+        if (Input.GetMouseButtonUp(0))
         {
+            Debug.Log("Mouse up");
             Cursor.visible = true;
         }
-        ClampRot(10.0f, 85.0f);
+    }
+
+    // Update is called once per frame
+    void FixedUpdate()
+    {
+        //Clamp vertical rotation of the canon pipe.
+        ClampRot(minCanonRotation, maxCanonRotation);
 
         if (fireBulletTimer >= fireBulletCooldown)
         {
+            //Hold the fire button
             if (Input.GetAxisRaw(fire) > 0 && holdingFire == false)
             {
                 holdingFire = true;
             }
+            //When let go, fires a bullet.
             else if (Input.GetAxisRaw(fire) <= 0 && holdingFire == true)
             {
                 float fireForce = 0.0f;
-                float minFirePower = maxImpulseForce / 3.0f;
 
-                if (maxImpulseForce * firePercent / maxFirePower < minFirePower)
+                //Sets a minimum firing velocity so the bullet doesn't spawn without velocity.
+                if (maxImpulseForce * firePercent / maxFirePercent < minFirePercent)
                 {
-                    fireForce = minFirePower;
+                    fireForce = minFirePercent;
                 }
                 else
                 {
-                    fireForce = maxImpulseForce * firePercent / maxFirePower;
+                    fireForce = maxImpulseForce * firePercent / maxFirePercent;
                 }
 
-                bullet = Instantiate(bulletPrefab, transform.position, Quaternion.identity);
-                bullet.ApplyImpulse(canonPipe.transform.up * fireForce);
-                firePercent = 0.0f;
-                fireBulletTimer = 0.0f;
-                holdingFire = false;
+                FireBullet(fireForce);
+                ResetFire();
             }
-
-            if (holdingFire == true)
-            {
-                if (firePercent <= maxFirePower)
-                {
-                    firePercent += Time.deltaTime;
-                }
-            }
+            ChargeFire();
         }
         else
         {
@@ -118,6 +134,49 @@ public class CannonController : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Charges the fire meter.
+    /// </summary>
+    /// <returns></returns>
+    private void ChargeFire()
+    {
+        if (holdingFire == true)
+        {
+            if (firePercent <= maxFirePercent)
+            {
+                firePercent += Time.deltaTime;
+                fireMeter.transform.localScale = new Vector3(firePercent * 50.0f,
+                                                             fireMeter.transform.localScale.y,
+                                                             fireMeter.transform.localScale.z);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Fire a bullet forward form the canon.
+    /// </summary>
+    /// <returns></returns>
+    private void FireBullet(float fireForce)
+    {
+        bullet = Instantiate(physicsObjectToFirePrefab, transform.position, Quaternion.identity);
+        bullet.ApplyImpulse(canonPipe.transform.up * fireForce);
+    }
+
+    /// <summary>
+    /// Reset the values of firing the canon.
+    /// </summary>
+    /// <returns></returns>
+    private void ResetFire()
+    {
+        firePercent = 0.0f;
+        fireBulletTimer = 0.0f;
+        holdingFire = false;
+    }
+
+    /// <summary>
+    /// Clamps rotations so you can't turn the canon pipe in impossible ways.
+    /// </summary>
+    /// <returns></returns>
     void ClampRot(float minAngle, float maxAngle)
     {
         canonPipe.transform.localRotation = Quaternion.Euler(Mathf.Clamp(canonPipe.transform.localRotation.eulerAngles.x, minAngle, maxAngle),
